@@ -1,0 +1,21 @@
+# Each entry is one app. Replace the entity IDs with your own.
+# Settings: https://joshwlivingston.github.io/ha-automations/
+
+bedroom_sunrise:
+  module: sunrise_fade
+  class: SunriseFade
+  light: light.bedroom_lamp
+
+living_room_sunset:
+  module: sunset_fade
+  class: SunsetFade
+  light: light.living_room_lamp
+
+porch_fade:
+  module: light_fade
+  class: LightFadeApp
+  light: light.porch
+  detector:
+    kind: sun
+  from_level: 3
+  to_level: -3

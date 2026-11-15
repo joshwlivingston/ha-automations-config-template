@@ -1,0 +1,59 @@
+name: Deploy
+
+on:
+  schedule:
+    # UTC; Mountain Standard Time 06:02–20:47 every 15 min, hourly overnight.
+    - cron: "2-59/15 13-23,0-3 * * *"
+    - cron: "2 4-12 * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Tag to deploy (empty = latest)
+        required: false
+      force:
+        description: Redeploy even if nothing changed
+        type: boolean
+        default: false
+      dev:
+        description: Include dev tags (vX.Y.Z.9xxx)
+        type: boolean
+        default: false
+
+env:
+  # Defaults to <this repo's owner>/ha-automations; set PACKAGE_REPO to override.
+  PACKAGE_REPO: ${{ vars.PACKAGE_REPO || format('{0}/ha-automations', github.repository_owner) }}
+  HA_SSH: ${{ vars.HA_SSH }}
+  HA_SSH_PORT: ${{ vars.HA_SSH_PORT || '22' }}
+  ADDON_SLUG: ${{ vars.ADDON_SLUG || 'a0d7b954_appdaemon' }}
+  REPO_URL: ${{ github.server_url }}/${{ vars.PACKAGE_REPO || format('{0}/ha-automations', github.repository_owner) }}
+
+jobs:
+  deploy:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["self-hosted"]') }}
+    # Skip in the template itself; runs in repos created from it.
+    if: github.repository != 'joshwlivingston/ha-automations-config-template'
+    environment: haos
+    concurrency: deploy-haos
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: config
+      - name: Resolve version
+        id: v
+        env:
+          VERSION: ${{ inputs.version }}
+          DEV: ${{ inputs.dev && '1' || '' }}
+        run: config/scripts/resolve-version.sh >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PACKAGE_REPO }}
+          ref: ${{ steps.v.outputs.version }}
+          path: ha-automations
+      - name: Deploy ${{ steps.v.outputs.version }}
+        env:
+          APPS_YAML: ${{ github.workspace }}/config/apps.yaml
+          FORCE: ${{ inputs.force && '1' || '' }}
+          DEV: ${{ steps.v.outputs.dev }}
+        run: ha-automations/scripts/deploy.sh "${{ steps.v.outputs.version }}"
